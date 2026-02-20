@@ -1,0 +1,582 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capacity Heatmap — The Data Collective</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --border: #1f1f1f;
+    --accent: #00ff88;
+    --accent2: #ff3366;
+    --accent3: #ffcc00;
+    --text: #e0e0e0;
+    --muted: #555;
+    --heat0: #0d1117;
+    --heat1: #0d3b2e;
+    --heat2: #0a6640;
+    --heat3: #00a854;
+    --heat4: #00ff88;
+    --red: #ff3366;
+    --yellow: #ffcc00;
+    --green: #00ff88;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    min-height: 100vh;
+    padding: 32px;
+  }
+
+  .header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .header span {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .legend-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  .legend-box {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+  }
+
+  .heatmap-container {
+    overflow-x: auto;
+    margin-bottom: 48px;
+  }
+
+  .heatmap-grid {
+    display: grid;
+    min-width: 900px;
+  }
+
+  .grid-header {
+    display: grid;
+    grid-template-columns: 120px repeat(12, 1fr);
+    gap: 3px;
+    margin-bottom: 3px;
+  }
+
+  .month-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-align: center;
+    padding: 6px 2px;
+    text-transform: uppercase;
+  }
+
+  .person-row {
+    display: grid;
+    grid-template-columns: 120px repeat(12, 1fr);
+    gap: 3px;
+    margin-bottom: 3px;
+  }
+
+  .person-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    padding-right: 12px;
+  }
+
+  .person-name.at-risk {
+    color: var(--accent2);
+  }
+
+  .heat-cell {
+    height: 48px;
+    border-radius: 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    border: 1px solid transparent;
+    background: var(--heat0);
+  }
+
+  .heat-cell:hover {
+    transform: scaleY(1.08);
+    border-color: var(--accent);
+    z-index: 10;
+  }
+
+  .heat-cell .count {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  .heat-cell .hours {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.4);
+    margin-top: 2px;
+  }
+
+  .heat-0 { background: var(--heat0); }
+  .heat-1 { background: #0d3b2e; }
+  .heat-2 { background: #0a5c38; }
+  .heat-3 { background: #0a7a44; }
+  .heat-4 { background: #00a854; }
+  .heat-5 { background: var(--accent); color: #000; }
+
+  .heat-cell.has-red { border-bottom: 2px solid var(--red); }
+  .heat-cell.has-yellow { border-bottom: 2px solid var(--yellow); }
+
+  /* Tooltip */
+  .tooltip {
+    display: none;
+    position: fixed;
+    background: #1a1a1a;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 12px;
+    z-index: 1000;
+    max-width: 260px;
+    pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0,255,136,0.15);
+  }
+
+  .tooltip.visible { display: block; }
+
+  .tooltip-header {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .tooltip-project {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-green { background: var(--green); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-red { background: var(--red); }
+  .dot-gray { background: var(--muted); }
+
+  /* Risk flags */
+  .risk-section {
+    margin-top: 40px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+  }
+
+  .risk-title {
+    font-size: 11px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .risk-cards {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .risk-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px 20px;
+    min-width: 200px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .risk-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+
+  .risk-card.critical::before { background: var(--red); }
+  .risk-card.warning::before { background: var(--yellow); }
+
+  .risk-card-person {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .risk-card.critical .risk-card-person { color: var(--red); }
+  .risk-card.warning .risk-card-person { color: var(--yellow); }
+
+  .risk-card-detail {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    line-height: 1.6;
+  }
+
+  .current-month-marker {
+    background: rgba(0,255,136,0.06);
+    border-radius: 3px;
+  }
+
+  .month-label.current {
+    color: var(--accent);
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Capacity Heatmap</h1>
+  <span>THE DATA COLLECTIVE // 2026</span>
+</div>
+
+<div class="legend">
+  <span class="legend-label">Load:</span>
+  <div class="legend-item"><div class="legend-box" style="background:#0d1117;border:1px solid #333"></div> None</div>
+  <div class="legend-item"><div class="legend-box" style="background:#0d3b2e"></div> Light</div>
+  <div class="legend-item"><div class="legend-box" style="background:#0a7a44"></div> Moderate</div>
+  <div class="legend-item"><div class="legend-box" style="background:#00ff88"></div> Heavy</div>
+  <span class="legend-label" style="margin-left:16px">Flags:</span>
+  <div class="legend-item"><div style="width:14px;height:3px;background:#ff3366;border-radius:1px"></div> Has Red</div>
+  <div class="legend-item"><div style="width:14px;height:3px;background:#ffcc00;border-radius:1px"></div> Has Yellow</div>
+</div>
+
+<div class="heatmap-container">
+  <div class="heatmap-grid" id="heatmapGrid"></div>
+</div>
+
+<div class="risk-section">
+  <div class="risk-title">// Capacity Risk Alerts</div>
+  <div class="risk-cards" id="riskCards"></div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// -- DATA ----------------------------------------------------------------------
+// Paste your projectsData here or inject via update_dashboard.ps1
+const projectsData = [{"Client Name":"Saltchuk ACA","Shard":"S","Complexity":"5","Data People":"Timo, Rafa","Team":"Timo","Live Date":"12/31/25","Estimated Total Hours":"160","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"","Production End":"","Refresh Begin":"","Refresh End":"","Modified Date":"02/10/26 1:20 PM"},{"Client Name":"OSG/Tote","Shard":"S","Complexity":"3","Data People":"Timo, Kevin","Team":"Timo","Live Date":"12/31/25","Estimated Total Hours":"80","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"","Production End":"","Refresh Begin":"","Refresh End":"","Modified Date":"02/10/26 1:28 PM"},{"Client Name":"Logans Roadhouse","Shard":"I","Complexity":"3","Data People":"Timo, Kevin","Team":"Timo","Live Date":"02/01/26","Estimated Total Hours":"80","Overall Status":"Red","Flagged Status Reason":"Client delay","On Red Issues Log":"TRUE","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"01/26/26","Production End":"01/30/26","Refresh Begin":"","Refresh End":"","Modified Date":"02/10/26 1:28 PM"},{"Client Name":"Vail Resorts","Shard":"V","Complexity":"4","Data People":"Sam, Rafa","Team":"Sam","Live Date":"03/02/26","Estimated Total Hours":"300","Overall Status":"Yellow","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"10/27/25","Test 1 End":"11/07/25","Test 2 Begin":"12/02/25","Test 2 End":"12/18/25","Test 3 Begin":"","Test 3 End":"","Production Begin":"01/20/26","Production End":"02/03/26","Refresh Begin":"02/17/26","Refresh End":"02/25/26","Modified Date":"02/10/26 1:28 PM"},{"Client Name":"Insperity Phase 2","Shard":"AE","Complexity":"5","Data People":"Kevin","Team":"Kevin","Live Date":"04/01/26","Estimated Total Hours":"321","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"01/12/26","Production End":"01/28/26","Refresh Begin":"02/27/26","Refresh End":"03/05/26","Modified Date":"02/10/26 1:28 PM"},{"Client Name":"Construction Resources","Shard":"YY","Complexity":"3","Data People":"Sam, Timi","Team":"Sam","Live Date":"04/01/26","Estimated Total Hours":"180","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"01/26/26","Test 1 End":"02/09/26","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"03/02/26","Production End":"03/12/26","Refresh Begin":"03/23/26","Refresh End":"03/25/26","Modified Date":"02/10/26 1:29 PM"},{"Client Name":"Brookdale","Shard":"AB","Complexity":"3","Data People":"Sam, Rafa, Cameron","Team":"Sam","Live Date":"05/01/26","Estimated Total Hours":"180","Overall Status":"Yellow","Flagged Status Reason":"Contract Delay","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"01/26/26","Test 1 End":"02/09/26","Test 2 Begin":"02/25/26","Test 2 End":"03/11/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"03/26/26","Production End":"04/07/26","Refresh Begin":"05/05/26","Refresh End":"05/11/26","Modified Date":"02/10/26 1:29 PM"},{"Client Name":"UMMS [University of Maryland]","Shard":"YY","Complexity":"3","Data People":"Timo, Rafa, Shema, Cameron","Team":"Timo","Live Date":"05/01/26","Estimated Total Hours":"180","Overall Status":"Red","Flagged Status Reason":"Contract Delay","On Red Issues Log":"TRUE","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"02/20/26","Test 2 End":"03/09/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"03/31/26","Production End":"04/09/26","Refresh Begin":"04/23/26","Refresh End":"04/27/26","Modified Date":"02/20/26 11:50 AM"},{"Client Name":"Dicks Sporting Goods","Shard":"Z","Complexity":"4","Data People":"Kevin, Sam","Team":"Kevin","Live Date":"06/28/26","Estimated Total Hours":"290","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"03/23/26","Test 1 End":"04/07/26","Test 2 Begin":"04/30/26","Test 2 End":"05/13/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"06/01/26","Production End":"06/10/26","Refresh Begin":"06/22/26","Refresh End":"06/24/26","Modified Date":"02/20/26 11:20 AM"},{"Client Name":"Pulte Group","Shard":"N","Complexity":"3","Data People":"Kevin, Jess","Team":"Kevin","Live Date":"06/01/26","Estimated Total Hours":"160","Overall Status":"Yellow","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"03/09/26","Test 1 End":"03/18/26","Test 2 Begin":"04/10/26","Test 2 End":"04/20/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"05/06/26","Production End":"05/12/26","Refresh Begin":"","Refresh End":"","Modified Date":"02/20/26 11:20 AM"},{"Client Name":"TSC - Tractor Supply","Shard":"V","Complexity":"2","Data People":"Timo, Rafa, Shema, Cameron","Team":"Timo","Live Date":"06/08/26","Estimated Total Hours":"100","Overall Status":"Red","Flagged Status Reason":"Contract Delay","On Red Issues Log":"TRUE","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"02/11/26","Test 1 End":"02/26/26","Test 2 Begin":"04/02/26","Test 2 End":"04/16/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"05/12/26","Production End":"05/22/26","Refresh Begin":"","Refresh End":"","Modified Date":"02/13/26 12:33 PM"},{"Client Name":"Sun Life","Shard":"V","Complexity":"3","Data People":"Timo, Kevin, Shema","Team":"Timo","Live Date":"07/01/26","Estimated Total Hours":"160","Overall Status":"Yellow","Flagged Status Reason":"Client delay","On Red Issues Log":"TRUE","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"02/12/26","Test 1 End":"03/05/26","Test 2 Begin":"04/15/26","Test 2 End":"04/28/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"05/27/26","Production End":"06/09/26","Refresh Begin":"07/02/26","Refresh End":"07/08/26","Modified Date":"02/20/26 11:21 AM"},{"Client Name":"Dentsply","Shard":"AB","Complexity":"3","Data People":"Timo, Rafa, Shema, Cameron","Team":"Timo","Live Date":"07/01/26","Estimated Total Hours":"160","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"03/05/26","Test 1 End":"03/20/26","Test 2 Begin":"04/15/26","Test 2 End":"04/28/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"05/26/26","Production End":"06/04/26","Refresh Begin":"07/06/26","Refresh End":"07/10/26","Modified Date":"02/10/26 1:30 PM"},{"Client Name":"DTCC [Trust \u0026 Clearning]","Shard":"YY","Complexity":"3","Data People":"Sam, Timi","Team":"Sam","Live Date":"07/01/26","Estimated Total Hours":"160","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"03/24/26","Test 1 End":"04/08/26","Test 2 Begin":"04/27/26","Test 2 End":"05/08/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"05/27/26","Production End":"06/05/26","Refresh Begin":"06/22/26","Refresh End":"06/24/26","Modified Date":"02/10/26 1:30 PM"},{"Client Name":"Grant Thorton","Shard":"V","Complexity":"3","Data People":"Kevin, Jess","Team":"Kevin","Live Date":"07/01/26","Estimated Total Hours":"160","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"03/12/26","Test 1 End":"03/20/26","Test 2 Begin":"04/20/26","Test 2 End":"05/04/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"06/01/26","Production End":"06/10/26","Refresh Begin":"06/25/26","Refresh End":"06/26/26","Modified Date":"02/10/26 1:30 PM"},{"Client Name":"Lear","Shard":"Z","Complexity":"4","Data People":"Kevin, Jess","Team":"Kevin","Live Date":"08/03/26","Estimated Total Hours":"280","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"04/20/26","Test 1 End":"05/05/26","Test 2 Begin":"05/27/26","Test 2 End":"06/09/26","Test 3 Begin":"","Test 3 End":"","Production Begin":"06/30/26","Production End":"07/09/26","Refresh Begin":"07/28/26","Refresh End":"07/30/26","Modified Date":"02/10/26 1:30 PM"},{"Client Name":"DTE","Shard":"N","Complexity":"4","Data People":"Sam, Timi","Team":"Sam","Live Date":"10/01/26","Estimated Total Hours":"280","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"03/17/26","Test 1 End":"04/07/26","Test 2 Begin":"05/19/26","Test 2 End":"06/09/26","Test 3 Begin":"07/13/26","Test 3 End":"07/31/26","Production Begin":"09/01/26","Production End":"09/15/26","Refresh Begin":"","Refresh End":"","Modified Date":"02/10/26 1:30 PM"},{"Client Name":"Optavise","Shard":"","Complexity":"5","Data People":"Timo, Kevin, Shema, Cameron, Jess","Team":"Timo","Live Date":"12/31/26","Estimated Total Hours":"321","Overall Status":"Green","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"","Production End":"","Refresh Begin":"","Refresh End":"","Modified Date":"02/10/26 1:30 PM"},{"Client Name":"","Shard":"","Complexity":"","Data People":"","Team":"","Live Date":"","Estimated Total Hours":"","Overall Status":"","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"","Production End":"","Refresh Begin":"","Refresh End":"","Modified Date":""},{"Client Name":"","Shard":"","Complexity":"","Data People":"","Team":"","Live Date":"","Estimated Total Hours":"","Overall Status":"","Flagged Status Reason":"","On Red Issues Log":"","Supp SQL":"","Loop Arounds":"","Test 1 Begin":"","Test 1 End":"","Test 2 Begin":"","Test 2 End":"","Test 3 Begin":"","Test 3 End":"","Production Begin":"","Production End":"","Refresh Begin":"","Refresh End":"","Modified Date":""}]
+
+// -- CONFIG --------------------------------------------------------------------
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const YEAR = 2026;
+const TODAY = new Date();
+const CURRENT_MONTH = TODAY.getMonth(); // 0-indexed
+
+// People flagged as at-risk (leaving/on leave)
+const AT_RISK = {
+  'Cameron': 'Contract ends Apr',
+  'Kevin': '10yr sabbatical',
+  'Rafa': 'Paternity leave'
+};
+
+// -- PARSE DATES ---------------------------------------------------------------
+function parseDate(str) {
+  if (!str) return null;
+  const parts = str.split('/');
+  if (parts.length < 3) return null;
+  let year = parseInt(parts[2]);
+  if (year < 100) year += 2000;
+  return new Date(year, parseInt(parts[0]) - 1, parseInt(parts[1]));
+}
+
+// Get all date ranges from a project to determine active months
+function getActiveMonths(project) {
+  const dateFields = [
+    ['Test 1 Begin', 'Test 1 End'],
+    ['Test 2 Begin', 'Test 2 End'],
+    ['Test 3 Begin', 'Test 3 End'],
+    ['Production Begin', 'Production End'],
+    ['Refresh Begin', 'Refresh End'],
+  ];
+
+  const activeMonths = new Set();
+
+  for (const [beginField, endField] of dateFields) {
+    const begin = parseDate(project[beginField]);
+    const end = parseDate(project[endField]);
+    if (begin && begin.getFullYear() === YEAR) {
+      activeMonths.add(begin.getMonth());
+    }
+    if (end && end.getFullYear() === YEAR) {
+      activeMonths.add(end.getMonth());
+    }
+    if (begin && end) {
+      // Fill in months between
+      let cur = new Date(begin);
+      while (cur <= end) {
+        if (cur.getFullYear() === YEAR) activeMonths.add(cur.getMonth());
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
+  }
+
+  // Also include live date month
+  const live = parseDate(project['Live Date']);
+  if (live && live.getFullYear() === YEAR) activeMonths.add(live.getMonth());
+
+  // If no dates found but project is active, use a heuristic
+  if (activeMonths.size === 0 && project['Overall Status']) {
+    const liveAny = parseDate(project['Live Date']);
+    if (liveAny) {
+      // Assume active from Jan through live month
+      const liveMonth = liveAny.getFullYear() === YEAR ? liveAny.getMonth() : 11;
+      for (let m = 0; m <= liveMonth; m++) activeMonths.add(m);
+    }
+  }
+
+  return activeMonths;
+}
+
+// -- BUILD PERSON ? MONTH ? PROJECTS MAP --------------------------------------
+function buildCapacityMap() {
+  const people = new Set();
+  const map = {}; // person -> month -> [{name, status}]
+
+  for (const project of projectsData) {
+    if (!project['Client Name']) continue;
+    const datapeople = (project['Data People'] || '').split(',').map(p => p.trim()).filter(Boolean);
+    for (const person of datapeople) {
+      people.add(person);
+    }
+  }
+
+  for (const person of people) {
+    map[person] = {};
+    for (let m = 0; m < 12; m++) map[person][m] = [];
+  }
+
+  for (const project of projectsData) {
+    if (!project['Client Name']) continue;
+    const datapeople = (project['Data People'] || '').split(',').map(p => p.trim()).filter(Boolean);
+    const activeMonths = getActiveMonths(project);
+
+    for (const person of datapeople) {
+      for (const month of activeMonths) {
+        if (!map[person]) map[person] = {};
+        if (!map[person][month]) map[person][month] = [];
+        map[person][month].push({
+          name: project['Client Name'],
+          status: project['Overall Status'] || 'Green'
+        });
+      }
+    }
+  }
+
+  return { map, people: [...people].sort() };
+}
+
+// -- HEAT LEVEL ----------------------------------------------------------------
+function heatLevel(count) {
+  if (count === 0) return 0;
+  if (count === 1) return 1;
+  if (count === 2) return 2;
+  if (count === 3) return 3;
+  if (count === 4) return 4;
+  return 5;
+}
+
+// -- RENDER --------------------------------------------------------------------
+function render() {
+  const { map, people } = buildCapacityMap();
+  const grid = document.getElementById('heatmapGrid');
+
+  // Header row
+  const header = document.createElement('div');
+  header.className = 'grid-header';
+  header.innerHTML = '<div></div>'; // empty corner
+  MONTHS.forEach((m, i) => {
+    const el = document.createElement('div');
+    el.className = 'month-label' + (i === CURRENT_MONTH ? ' current' : '');
+    el.textContent = m;
+    header.appendChild(el);
+  });
+  grid.appendChild(header);
+
+  // Person rows
+  for (const person of people) {
+    const row = document.createElement('div');
+    row.className = 'person-row';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'person-name' + (AT_RISK[person] ? ' at-risk' : '');
+    nameEl.textContent = person;
+    row.appendChild(nameEl);
+
+    let maxLoad = 0;
+
+    for (let m = 0; m < 12; m++) {
+      const projects = map[person]?.[m] || [];
+      const count = projects.length;
+      if (count > maxLoad) maxLoad = count;
+
+      const cell = document.createElement('div');
+      cell.className = `heat-cell heat-${heatLevel(count)}${m === CURRENT_MONTH ? ' current-month-marker' : ''}`;
+
+      const hasRed = projects.some(p => p.status === 'Red');
+      const hasYellow = projects.some(p => p.status === 'Yellow');
+      if (hasRed) cell.classList.add('has-red');
+      else if (hasYellow) cell.classList.add('has-yellow');
+
+      if (count > 0) {
+        cell.innerHTML = `<span class="count">${count}</span><span class="hours">proj</span>`;
+      }
+
+      cell.addEventListener('mouseenter', (e) => showTooltip(e, person, MONTHS[m], projects));
+      cell.addEventListener('mousemove', moveTooltip);
+      cell.addEventListener('mouseleave', hideTooltip);
+
+      row.appendChild(cell);
+    }
+
+    grid.appendChild(row);
+  }
+
+  // Risk cards
+  renderRiskCards(map, people);
+}
+
+function renderRiskCards(map, people) {
+  const container = document.getElementById('riskCards');
+
+  // Find peak months per person
+  for (const person of people) {
+    let peak = 0;
+    let peakMonth = 0;
+    for (let m = 0; m < 12; m++) {
+      const count = (map[person]?.[m] || []).length;
+      if (count > peak) { peak = count; peakMonth = m; }
+    }
+
+    const isAtRisk = AT_RISK[person];
+    if (peak >= 3 || isAtRisk) {
+      const card = document.createElement('div');
+      card.className = `risk-card ${peak >= 4 || isAtRisk ? 'critical' : 'warning'}`;
+
+      let detail = `Peak: ${peak} projects in ${MONTHS[peakMonth]}`;
+      if (isAtRisk) detail += `\n? ${AT_RISK[person]}`;
+
+      card.innerHTML = `
+        <div class="risk-card-person">${person}</div>
+        <div class="risk-card-detail" style="white-space:pre-line">${detail}</div>
+      `;
+      container.appendChild(card);
+    }
+  }
+
+  if (container.children.length === 0) {
+    container.innerHTML = '<div style="font-family:Share Tech Mono,monospace;font-size:11px;color:#555;letter-spacing:2px">// NO CRITICAL RISK FLAGS DETECTED</div>';
+  }
+}
+
+// -- TOOLTIP -------------------------------------------------------------------
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(e, person, month, projects) {
+  if (projects.length === 0) { hideTooltip(); return; }
+
+  let html = `<div class="tooltip-header">${person} // ${month}</div>`;
+  for (const p of projects) {
+    const dotClass = p.status === 'Red' ? 'dot-red' : p.status === 'Yellow' ? 'dot-yellow' : p.status === 'Green' ? 'dot-green' : 'dot-gray';
+    html += `<div class="tooltip-project"><div class="status-dot ${dotClass}"></div>${p.name}</div>`;
+  }
+  tooltip.innerHTML = html;
+  tooltip.classList.add('visible');
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  tooltip.style.left = (e.clientX + 16) + 'px';
+  tooltip.style.top = (e.clientY - 8) + 'px';
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+}
+
+render();
+</script>
+</body>
+</html>
