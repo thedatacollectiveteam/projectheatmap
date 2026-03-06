@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -8,18 +8,18 @@
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap');
 
   :root {
-    --bg: #0a0a0a;
-    --surface: #111111;
-    --border: #1f1f1f;
+    --bg: #1a1f2e;
+    --surface: #242938;
+    --border: #2e3548;
     --accent: #00ff88;
     --accent2: #ff3366;
     --accent3: #ffcc00;
-    --text: #e0e0e0;
-    --muted: #555;
-    --heat0: #0d1117;
-    --heat1: #0d3b2e;
-    --heat2: #0a6640;
-    --heat3: #00a854;
+    --text: #e8ecf4;
+    --muted: #7a8499;
+    --heat0: #1e2535;
+    --heat1: #1a4a3a;
+    --heat2: #1a7a50;
+    --heat3: #00c464;
     --heat4: #00ff88;
     --red: #ff3366;
     --yellow: #ffcc00;
@@ -417,6 +417,7 @@ function buildCapacityMap() {
 
   for (const project of projectsData) {
     if (!project['Client Name']) continue;
+    if (project['Closed'] === 'TRUE') continue;
     const datapeople = (project['Data People'] || '').split(',').map(p => p.trim()).filter(Boolean);
     for (const person of datapeople) {
       people.add(person);
@@ -430,6 +431,7 @@ function buildCapacityMap() {
 
   for (const project of projectsData) {
     if (!project['Client Name']) continue;
+    if (project['Closed'] === 'TRUE') continue;
     const datapeople = (project['Data People'] || '').split(',').map(p => p.trim()).filter(Boolean);
     const activeMonths = getActiveMonths(project);
 
